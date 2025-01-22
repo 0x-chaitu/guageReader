@@ -102,15 +102,8 @@ public class MainActivity extends AppCompatActivity {
                     Log.d("PhotoPicker", "No media selected");
                 }
             });
-    private TextView textView1;
-    private TextView textView2;
-    private TextView textView3;
-
-    private RectOverlay rectOverlay;
 
     private ExecutorService cameraExecutor;
-
-
 
     private ActivityResultLauncher<String[]> activityResultLauncher =
             registerForActivityResult(
@@ -140,12 +133,6 @@ public class MainActivity extends AppCompatActivity {
         viewBinding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(viewBinding.getRoot());
 
-//        textView1 = viewBinding.textView1;
-//        textView2 = viewBinding.textView2;
-//        textView3 = viewBinding.textView3;
-        rectOverlay = viewBinding.rectOverlay;
-
-        // Request camera permissions
         if (allPermissionsGranted()) {
             startCamera();
         } else {
@@ -174,7 +161,6 @@ public class MainActivity extends AppCompatActivity {
     private void takePhoto() {
         // Get a stable reference of the modifiable image capture use case
         if (imageCapture == null) return;
-
 
         // Set up image capture listener, which is triggered after photo has
         // been taken
@@ -220,15 +206,6 @@ public class MainActivity extends AppCompatActivity {
                 // Used to bind the lifecycle of cameras to the lifecycle owner
                 ProcessCameraProvider cameraProvider = cameraProviderFuture.get();
 
-
-                ImageAnalysis imageAnalyzer = new ImageAnalysis.Builder()
-                        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                        //.setTargetAspectRatio(AspectRatio.RATIO_16_9)
-                        //.setTargetResolution(Properties.TARGET_RESOLUTION)
-                        .build();
-                imageAnalyzer.setAnalyzer(cameraExecutor, new ImageAnalyzer());
-
-
                 // Preview
                 Preview preview = new Preview.Builder()
                         .build();
@@ -248,7 +225,6 @@ public class MainActivity extends AppCompatActivity {
                     // Bind use cases to camera
                     cameraProvider.bindToLifecycle(
                             this, cameraSelector, preview, imageCapture
-//                            ,imageAnalyzer
                             );
 
                 } catch (Exception exc) {
@@ -261,7 +237,6 @@ public class MainActivity extends AppCompatActivity {
         }, ContextCompat.getMainExecutor(this));
 
     }
-
 
     private void requestPermissions() {
         activityResultLauncher.launch(REQUIRED_PERMISSIONS);
@@ -282,12 +257,7 @@ public class MainActivity extends AppCompatActivity {
         cameraExecutor.shutdown();
     }
 
-
-
-
-
     private static final String TAG = "GuageReader";
-    private static final String FILENAME_FORMAT = "yyyy-MM-dd-HH-mm-ss-SSS";
     private static final String[] REQUIRED_PERMISSIONS;
 
     static {
@@ -295,56 +265,5 @@ public class MainActivity extends AppCompatActivity {
         permissions.add(Manifest.permission.CAMERA);
         permissions.add(Manifest.permission.RECORD_AUDIO);
         REQUIRED_PERMISSIONS = permissions.toArray(new String[0]);
-    }
-
-    private class ImageAnalyzer implements ImageAnalysis.Analyzer {
-
-        @Override
-        public void analyze(@NonNull ImageProxy image) {
-            Bitmap bitmap = image.toBitmap();
-
-            Mat mat = new Mat(bitmap.getHeight(), bitmap.getWidth(), CvType.CV_8UC4);
-
-            // Convert the Bitmap to Mat
-            Utils.bitmapToMat(bitmap, mat);
-
-            // Convert the Mat to grayscale
-            Mat grayMat = new Mat();
-            Imgproc.cvtColor(mat, grayMat, Imgproc.COLOR_BGR2GRAY);
-
-            Imgproc.medianBlur(grayMat, grayMat, 5);
-
-            Mat circles = new Mat();
-            Imgproc.HoughCircles(grayMat, circles, Imgproc.HOUGH_GRADIENT, 1.0,
-                    (double)grayMat.rows()/2, // change this value to detect circles with different distances to each other
-                    50.0, 30.0, 0, 0); // change the last two parameters
-
-            double maxRadius = 0;
-            int maxRadiusIndex = -1;
-            for (int x = 0; x < circles.cols(); x++) {
-                double[] c = circles.get(0, x);
-                if (c[2] > maxRadius) {
-                    maxRadius = c[2];
-                    maxRadiusIndex = x;
-                }
-            }
-            double[] c = circles.get(0, maxRadiusIndex);
-
-            if (c != null) {
-
-                Point center = new Point(Math.round(c[0]), Math.round(c[1]));
-                // circle radius
-                // draw the circle center
-                Imgproc.circle(mat, center, 1, new Scalar(0, 255, 0), 3, 8, 0);
-                // draw the circle outline
-                Imgproc.circle(mat, center, (int) Math.round(c[2]), new Scalar(0, 0, 255), 3, 8, 0);
-
-
-            }
-
-            Utils.matToBitmap(mat, bitmap);
-            rectOverlay.drawBounds(bitmap);
-            image.close();
-        }
     }
 }

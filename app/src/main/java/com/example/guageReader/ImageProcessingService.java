@@ -4,20 +4,10 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
-import android.content.ContentResolver;
-import android.content.ContentValues;
 import android.content.Intent;
-import android.content.res.AssetFileDescriptor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.graphics.Canvas;
-import android.graphics.Color;
-import android.graphics.Paint;
-import android.net.Uri;
-import android.os.Build;
-import android.os.Environment;
 import android.os.IBinder;
-import android.provider.MediaStore;
 import android.util.Log;
 
 import androidx.annotation.Nullable;
@@ -32,29 +22,20 @@ import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfPoint;
-import org.opencv.core.MatOfRect;
+import org.opencv.core.MatOfPoint2f;
 import org.opencv.core.Point;
 import org.opencv.core.Rect;
 import org.opencv.core.Scalar;
 import org.opencv.core.Size;
-import org.opencv.features2d.MSER;
 import org.opencv.imgproc.Imgproc;
-import org.opencv.objdetect.CascadeClassifier;
 import org.tensorflow.lite.Interpreter;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.OutputStream;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.nio.MappedByteBuffer;
-import java.nio.channels.FileChannel;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
+import java.util.Arrays;
 import java.util.List;
 
 public class ImageProcessingService extends Service {
@@ -232,11 +213,9 @@ public class ImageProcessingService extends Service {
 
 
         } catch (FileNotFoundException e) {
-            Log.d("bitmap", "there");
 
             e.printStackTrace();
         } catch (IOException e) {
-            Log.d("bitmap", "there");
 
             throw new RuntimeException(e);
         }
@@ -248,6 +227,7 @@ public class ImageProcessingService extends Service {
     private void findNeedle() {
         findCircle();
         Bitmap bitmap;
+        Point possibleNeedlePoint = new Point();
         try {
             FileInputStream stream = new FileInputStream(file);
             bitmap = BitmapFactory.decodeStream(stream);
@@ -289,15 +269,23 @@ public class ImageProcessingService extends Service {
             if (lines.rows() > 0) {
                 double maxDist = 80;
 
+                double needleDist = 0;
                 for (int i = 0; i < lines.rows(); i++) {
                     double[] l = lines.get(i, 0);
                     double dist1 = Math.sqrt(Math.pow(l[0] - center.x, 2) + Math.pow(l[1] - center.y, 2));
                     double dist2 = Math.sqrt(Math.pow(l[2] - center.x, 2) + Math.pow(l[3] - center.y, 2));
-
                     if (dist2 <= maxDist || dist1 <= maxDist) {
-                        Imgproc.line(mat, new Point(l[0], l[1]), new Point(l[2], l[3]), new Scalar(255, 0, 0, 255), 1, Imgproc.LINE_AA, 0);
+                        if (dist2 > dist1 && needleDist < dist2) {
+                            possibleNeedlePoint = new Point(l[2], l[3]);
+                            needleDist = dist2;
+                        } else if ( dist1 > dist2 && needleDist < dist1 ) {
+                            possibleNeedlePoint = new Point(l[0], l[1]);
+                            needleDist = dist1;
+                        }
                     }
                 }
+                Imgproc.line(mat, new Point(possibleNeedlePoint.x, possibleNeedlePoint.y), new Point(center.x, center.y), new Scalar(255, 0, 0, 255), 1, Imgproc.LINE_AA, 0);
+
             }
 
 
@@ -310,7 +298,10 @@ public class ImageProcessingService extends Service {
 
             for (MatOfPoint contour : contours) {
                 Rect boundingRect = Imgproc.boundingRect(contour);
-                if (boundingRect.width >= 0.8 * boundingRect.height && boundingRect.width <= 150 && !(boundingRect.height < 12 && boundingRect.height >= 6)) {
+                if (
+                        boundingRect.width >= 0.8 * boundingRect.height && boundingRect.width <= 150
+                                && !(boundingRect.height < 12 && boundingRect.height >= 6)
+                ) {
                     Imgproc.rectangle(edges,boundingRect, new Scalar(0, 0,0 ,0 ), -1);
                 }
             }
@@ -321,8 +312,7 @@ public class ImageProcessingService extends Service {
 
             Imgproc.findContours(dilated, contours, hierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
 
-            Bitmap bthresh = bitmap;
-            Utils.matToBitmap(thresh, bthresh);
+            Utils.matToBitmap(thresh, bitmap);
 
             int max = -10000;
             Rect maxRect = new Rect();
@@ -347,21 +337,40 @@ public class ImageProcessingService extends Service {
                             maxRect = boundingRect;
                             max = foo;
                         }
-
                         if (foo < min) {
-                            minRect = boundingRect;
-                            min = foo;
+                            boolean inside = false;
+                            Point centreOfCountour  = new Point(boundingRect.x + (double) (boundingRect.width) / 2,
+                                    boundingRect.y + (double) (boundingRect.height) / 2);
+//                            for (MatOfPoint outerC : contours) {
+//                                if (outerC != contour) {
+//                                    double i = Imgproc.pointPolygonTest(new MatOfPoint2f(outerC.toArray()), centreOfCountour,
+//                                            false);
+//
+//                                    Log.d("bitmap", String.valueOf(i) + " " + foo + " " + min);
+//
+//                                    if (i > 0) {
+//                                        inside = true;
+//                                    }
+//                                }
+//                            }
+                            if (inside != true) {
+                                minRect = boundingRect;
+                                min = foo;
+                            }
                         }
                     }
                     catch (NumberFormatException e) {
                     }
-                    Log.d("bitmap,", val);
                 }
             }
+
 
             drawBox(maxRect, mat);
             drawBox(minRect, mat);
 
+            double angle1 = calculateAngle(center,new Point(minRect.x + (double) minRect.width /2,minRect.y + (double) minRect.height /2 ));
+            double angle2 = calculateAngle(center, new Point(maxRect.x + (double) maxRect.width /2,maxRect.y + (double) maxRect.height /2 ));
+            double angle3 = calculateAngle(center, possibleNeedlePoint);
 
             Utils.matToBitmap(mat, bitmap);
 
@@ -369,12 +378,24 @@ public class ImageProcessingService extends Service {
             intent.putExtra("processed_bitmap", bitmap);
             LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
 
+            Intent intent2 = new Intent("values");
+            intent2.putExtra("min", min);
+            LocalBroadcastManager.getInstance(this).sendBroadcast(intent2);
+
+            intent2.putExtra("max", max);
+            LocalBroadcastManager.getInstance(this).sendBroadcast(intent2);
+
+            intent2.putExtra("minAngle", angle1);
+            LocalBroadcastManager.getInstance(this).sendBroadcast(intent2);
+            intent2.putExtra("maxAngle", angle2);
+            LocalBroadcastManager.getInstance(this).sendBroadcast(intent2);
+            intent2.putExtra("needleAngle", angle3);
+            LocalBroadcastManager.getInstance(this).sendBroadcast(intent2);
+
         } catch (FileNotFoundException e) {
-            Log.d("bitmap", "there");
 
             e.printStackTrace();
         } catch (IOException e) {
-            Log.d("bitmap", "there");
 
             throw new RuntimeException(e);
         }
@@ -397,13 +418,18 @@ public class ImageProcessingService extends Service {
 
 
 
-    private MappedByteBuffer loadModelFile() throws IOException {
-        AssetFileDescriptor fileDescriptor= getAssets().openFd("mnist.tflite");
-        FileInputStream inputStream=new FileInputStream(fileDescriptor.getFileDescriptor());
-        FileChannel fileChannel=inputStream.getChannel();
-        long startOffset=fileDescriptor.getStartOffset();
-        long declareLength=fileDescriptor.getDeclaredLength();
-        return fileChannel.map(FileChannel.MapMode.READ_ONLY,startOffset,declareLength);
+    public static double calculateAngle(Point p1, Point p2) {
+        double ydiff = p1.y - p2.y;
+        double xdiff = p2.x - p1.x;
+        double angle = Math.atan2(ydiff, xdiff);
+        angle = Math.toDegrees(angle);
+
+        Log.d("bitmap", String.valueOf(angle)+ ydiff + " " + xdiff);
+        if ( (ydiff < 0 && xdiff < 0) || ( ydiff < 0 && xdiff > 0) ) {
+            angle += 360;
+        }
+
+        return angle;
     }
 
     private String classify(Bitmap bitmap) {
