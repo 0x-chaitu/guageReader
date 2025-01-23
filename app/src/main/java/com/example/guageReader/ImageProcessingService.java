@@ -1,4 +1,5 @@
 package com.example.guageReader;
+import android.annotation.SuppressLint;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -7,6 +8,7 @@ import android.app.Service;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.os.Build;
 import android.os.IBinder;
 import android.util.Log;
 
@@ -118,7 +120,11 @@ public class ImageProcessingService extends Service {
                 .build();
 
         if (intent != null && intent.hasExtra("image")) {
-            file = intent.getParcelableExtra("image", File.class);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                file = intent.getParcelableExtra("image", File.class);
+            }else {
+                file = intent.getParcelableExtra("image");
+            }
 //            new Thread(this::processImage).start();
             new Thread(this::processGuage).start();
 
@@ -251,9 +257,8 @@ public class ImageProcessingService extends Service {
             Imgproc.circle(mat, center, 1, new Scalar(255, 0,0, 255), 3, 8, 0);
             Imgproc.circle(mat, center, (int) Math.round(maxRadius), new Scalar(255, 0, 0, 0), 3, 8, 0);
 
-            Mat mask = Mat.zeros(edges.rows(), edges.cols(), edges.type());
-
             // Color space outside our guage (circle) with black
+            Mat mask = Mat.zeros(edges.rows(), edges.cols(), edges.type());
             Imgproc.circle(mask, center, (int) Math.round(maxRadius) - 65, new Scalar(255, 255, 255, 255), -1);
             Core.bitwise_and(edges, mask, edges);
 

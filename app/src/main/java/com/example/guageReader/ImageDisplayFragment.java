@@ -8,6 +8,7 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -79,7 +80,11 @@ public class ImageDisplayFragment extends Fragment {
             }
         });
         if (getArguments() != null) {
-            bitmap = getArguments().getParcelable("bitmap", Bitmap.class);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                bitmap = getArguments().getParcelable("bitmap", Bitmap.class);
+            }else {
+                bitmap = getArguments().getParcelable("bitmap");
+            }
             imageView.setImageBitmap(bitmap);
 
 
@@ -129,7 +134,12 @@ public class ImageDisplayFragment extends Fragment {
         @Override
         public void onReceive(Context context, Intent intent) {
             if (intent.getAction().equals("image_processed")) {
-                Bitmap processedBitmap = intent.getParcelableExtra("processed_bitmap", Bitmap.class);
+                Bitmap processedBitmap = null;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    processedBitmap = intent.getParcelableExtra("processed_bitmap", Bitmap.class);
+                }else {
+                    processedBitmap = intent.getParcelableExtra("processed_bitmap");
+                }
                 if (processedBitmap != null) {
                     imageView.setImageBitmap(processedBitmap);
                 }
