@@ -80,7 +80,7 @@ public class ImageDisplayFragment extends Fragment {
         });
         if (getArguments() != null) {
             bitmap = getArguments().getParcelable("bitmap", Bitmap.class);
-
+            imageView.setImageBitmap(bitmap);
 
 
             new Thread(() -> {

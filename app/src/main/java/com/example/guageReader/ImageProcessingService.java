@@ -120,7 +120,7 @@ public class ImageProcessingService extends Service {
         if (intent != null && intent.hasExtra("image")) {
             file = intent.getParcelableExtra("image", File.class);
 //            new Thread(this::processImage).start();
-            new Thread(this::findNeedle).start();
+            new Thread(this::processGuage).start();
 
 //            if (bitmap != null) {
 //                bitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true); // Create a mutable copy
@@ -207,11 +207,6 @@ public class ImageProcessingService extends Service {
                 center = new Point(Math.round(c[0]), Math.round(c[1]));
             }
 
-
-
-
-
-
         } catch (FileNotFoundException e) {
 
             e.printStackTrace();
@@ -224,7 +219,9 @@ public class ImageProcessingService extends Service {
     }
 
 
-    private void findNeedle() {
+    private void processGuage() {
+
+        // find circle guage
         findCircle();
         Bitmap bitmap;
         Point possibleNeedlePoint = new Point();
@@ -238,17 +235,12 @@ public class ImageProcessingService extends Service {
             // Convert the Bitmap to Mat
             Utils.bitmapToMat(bitmap, mat);
 
-
             // Convert the Mat to grayscale
             Mat grayMat = new Mat();
-//            Imgproc.GaussianBlur(mat, grayMat, new org.opencv.core.Size(5, 5), 0);
             Imgproc.cvtColor(mat, grayMat, Imgproc.COLOR_BGR2GRAY);
-
-
 
             Mat thresh = new Mat();
             Imgproc.threshold(grayMat, thresh, 128, 255, Imgproc.THRESH_BINARY);
-
 
             Mat edges = new Mat();
             Imgproc.Canny(thresh, edges, 50, 200, 3);
@@ -257,15 +249,15 @@ public class ImageProcessingService extends Service {
             Imgproc.HoughLinesP(edges, lines, 1, Math.PI/180, 15, 50, 10);
 
             Imgproc.circle(mat, center, 1, new Scalar(255, 0,0, 255), 3, 8, 0);
-                // draw the circle outline
             Imgproc.circle(mat, center, (int) Math.round(maxRadius), new Scalar(255, 0, 0, 0), 3, 8, 0);
 
             Mat mask = Mat.zeros(edges.rows(), edges.cols(), edges.type());
 
-                // Draw a filled circle in white (255 intensity for all channels)
+            // Color space outside our guage (circle) with black
             Imgproc.circle(mask, center, (int) Math.round(maxRadius) - 65, new Scalar(255, 255, 255, 255), -1);
             Core.bitwise_and(edges, mask, edges);
 
+            // find the approximate needle
             if (lines.rows() > 0) {
                 double maxDist = 80;
 
@@ -288,14 +280,13 @@ public class ImageProcessingService extends Service {
 
             }
 
-
-
+            // find contours which can be numbers
             List<MatOfPoint> contours = new ArrayList<>();
             Mat hierarchy = new Mat();
 
             Imgproc.findContours(edges, contours, hierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
 
-
+            // Color all contours which are not numbers with black
             for (MatOfPoint contour : contours) {
                 Rect boundingRect = Imgproc.boundingRect(contour);
                 if (
@@ -322,7 +313,7 @@ public class ImageProcessingService extends Service {
             Rect minRect = new Rect();
 
 
-            // find max and min
+            // find max and min and the bounding boxes
             for (MatOfPoint contour : contours) {
                 Rect boundingRect = Imgproc.boundingRect(contour);
 
@@ -339,6 +330,9 @@ public class ImageProcessingService extends Service {
                         }
                         if (foo < min) {
                             boolean inside = false;
+
+                            // check if contour region is not a region of other numbers contour
+                            // for ex: 0 can belong to 800, 50 ..
                             Point centreOfCountour  = new Point(boundingRect.x + (double) (boundingRect.width) / 2,
                                     boundingRect.y + (double) (boundingRect.height) / 2);
 //                            for (MatOfPoint outerC : contours) {
@@ -415,9 +409,6 @@ public class ImageProcessingService extends Service {
         Imgproc.line(mat, pt4, pt1, color, 2); // Left line
     }
 
-
-
-
     public static double calculateAngle(Point p1, Point p2) {
         double ydiff = p1.y - p2.y;
         double xdiff = p2.x - p1.x;
@@ -461,28 +452,6 @@ public class ImageProcessingService extends Service {
 
         String x = tessBaseAPI.getUTF8Text();;
 
-//        try {
-//            ContentValues values = new ContentValues();
-//            values.put(MediaStore.Images.Media.DISPLAY_NAME, "image_" + x + ".jpg");
-//            values.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
-//            values.put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + File.separator + "MyImages");
-//
-//            ContentResolver resolver = getBaseContext().getContentResolver();
-//            Uri uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
-//
-//            if (uri != null) {
-//                try (OutputStream outputStream = resolver.openOutputStream(uri)) {
-//                    borderedBitmap.compress(Bitmap.CompressFormat.JPEG, 100, outputStream);
-//                } catch (Exception e) {
-//                    Log.e("ImageSaver", "Error saving image to MediaStore: " + e.getMessage());
-//                }
-//            } else {
-//                Log.e("ImageSaver", "Failed to insert image into MediaStore");
-//            }
-//
-//        } catch (Exception e) {
-//            Log.e("ImageSaver", "Error saving image to MediaStore: " + e.getMessage());
-//        }
         return x;
     }
 

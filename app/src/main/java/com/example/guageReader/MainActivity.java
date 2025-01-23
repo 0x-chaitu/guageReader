@@ -33,6 +33,8 @@ import androidx.core.content.ContextCompat;
 import com.example.guageReader.databinding.ActivityMainBinding;
 import com.google.common.util.concurrent.ListenableFuture;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
